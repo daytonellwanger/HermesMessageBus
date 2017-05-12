@@ -14,6 +14,7 @@ public class ClientThread {
 	private static final String TAG_START = "<TAG>";
 	private static final String MSG_START = "<MSG>";
 	private static final String OUTPUT_START = "<OUTPUT>";
+	private static final String MSG_SEND = "<SEND>";
 	
 	private String name;
 	private Process process;
@@ -96,6 +97,8 @@ public class ClientThread {
 						central.receiveMessage(next.substring(MSG_START.length()));
 					} else if (next.startsWith(OUTPUT_START)){
 						System.out.println(name + ": " + next.substring(OUTPUT_START.length()));
+					} else if (next.startsWith(MSG_SEND)) {
+						central.sendMessage(next.substring(MSG_SEND.length()));
 					}
 				} catch (Exception ex) {
 					System.out.println(name + ": " + ExceptionUtils.getStackTrace(ex));

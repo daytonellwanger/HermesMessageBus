@@ -1,0 +1,252 @@
+package hermes;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Scanner;
+
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.SmackException.NotConnectedException;
+import org.jivesoftware.smack.StanzaListener;
+import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
+import org.jivesoftware.smack.filter.StanzaFilter;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+public class Central implements StanzaListener, StanzaFilter {
+	
+	private static final String CLIENT_PATHS_FILE = "clients.txt";
+	private static final String CLIENT_FOLDER = "clients";
+	private static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
+	private static final String PROCESS_ID_FIELD = "processId";
+	private static final String TAGS_FIELD = "tags";
+	private static final String NO_TAGS = "none";
+	
+	private List<String> clientPaths;
+	private List<ClientThread> clients;
+	
+	private ByteArrayOutputStream pausedOutput;
+	
+
+	public static void main(String[] args) {
+		new Central().init();
+	}
+	
+	private void init() {
+		clientPaths = new LinkedList<String>();
+		clients = new LinkedList<ClientThread>();
+		getClientPaths();
+		initClients();
+		initXMPP();
+	}
+	
+	private void getClientPaths() {
+		clientPaths.addAll(getClientPathsFromFile());
+		clientPaths.addAll(getClientPathsFromFolder());
+	}
+	
+	private static List<String> getClientPathsFromFile() {
+		List<String> clients = new LinkedList<String>();
+		File pathsFile = new File(CLIENT_PATHS_FILE);
+		try {
+			Scanner scanner = new Scanner(pathsFile);
+			while(scanner.hasNextLine()) {
+				clients.add(scanner.nextLine());
+			}
+			scanner.close();
+		} catch (FileNotFoundException e) {
+			System.out.println("Server paths file " + CLIENT_PATHS_FILE + " not found.");
+			e.printStackTrace();
+		}
+		return clients;
+		
+	}
+	
+	private static List<String> getClientPathsFromFolder() {
+		List<String> clients = new LinkedList<String>();
+		File folder = new File(CLIENT_FOLDER);
+		for(String file : folder.list()) {
+			String[] tokens = file.split("\\.");
+			if(tokens.length >= 2) {
+				if(tokens[tokens.length - 1].equalsIgnoreCase("jar")) {
+					clients.add(CLIENT_FOLDER + "/" + file);
+				}
+			}
+		}
+		return clients;
+	}
+	
+	private void initClients() {
+		for(String jarPath : clientPaths) {
+			try {
+				initClient(jarPath);
+			} catch (Exception ex) {
+				System.out.println("Could not load " + jarPath);
+				ex.printStackTrace();
+			}
+		}
+	}
+	
+	private void initClient(String exePath) throws Exception {
+		String fileExtension = exePath.substring(exePath.lastIndexOf(".") + 1);
+		ProcessBuilder builder;
+		if(fileExtension.equalsIgnoreCase("jar")) {
+			builder = new ProcessBuilder("java", "-jar", (new File(exePath)).getAbsolutePath());
+		} else if (fileExtension.equalsIgnoreCase("js")) {
+			builder = new ProcessBuilder("node", (new File(exePath)).getAbsolutePath());
+		} else {
+			return;
+		}
+		
+		File directory = (new File(exePath)).getParentFile();
+		if(directory != null) {
+			builder.directory(directory);
+		}
+		try {
+			Process clientProcess = builder.start();
+			ClientThread client = new ClientThread(exePath, clientProcess, this);
+			clients.add(client);
+		} catch (Exception ex) {
+			System.out.println("Failed to start server " + exePath);
+			ex.printStackTrace();
+		}
+	}
+	
+	private void initXMPP() {
+		try {
+			Scanner scanner = new Scanner(System.in);
+			System.out.print("XMPP Username: ");
+			String[] usernameAndDomain = scanner.next().split("@");
+			String username = usernameAndDomain[0];
+			String domain = usernameAndDomain[1];
+			System.out.print("\nHost: ");
+			String host = scanner.next();
+			System.out.print("\nPassword: ");
+			String password = scanner.next();
+			System.out.println();
+			System.out.print("\nSecurity? ");
+			boolean security = scanner.next().toLowerCase().contains("y");
+			System.out.println();
+	
+			XMPPTCPConnectionConfiguration.Builder configBuilder = 
+					XMPPTCPConnectionConfiguration.builder();
+			configBuilder.setUsernameAndPassword(username, password);
+			configBuilder.setServiceName(domain);
+			configBuilder.setHost(host);
+			if(!security) {
+				configBuilder.setSecurityMode(SecurityMode.disabled);
+			}
+			
+			AbstractXMPPConnection connection = new XMPPTCPConnection(configBuilder.build());
+			try {
+				connection.connect();
+				connection.login();
+				connection.addSyncStanzaListener(this, this);
+				System.out.println("XMPP Connected.");
+			} catch (Exception ex) {
+				System.out.println("Failed to login.");
+				scanner.close();
+				stopClients();
+				ex.printStackTrace();
+			}
+
+			while(!scanner.next().equals("q"));
+			scanner.close();
+			stopClients();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+	
+	private void stopClients() {
+		for(ClientThread client : clients) {
+			client.stop();
+		}
+	}
+	
+	//to be called by clients
+	public void receiveMessage(String message) {
+		JSONObject json;
+		try {
+			json = new JSONObject(message);
+			receiveMessage(json);
+		} catch (Exception ex) {}
+		
+	}
+	
+	private void receiveMessage(JSONObject message) {
+		System.out.println(message.toString());
+		if(!message.has(PROCESS_ID_FIELD)) {
+			message.put(PROCESS_ID_FIELD, UNSPECIFIED_PROCESS_ID);
+		}
+		forwardMessage(message);
+	}
+	
+	private void forwardMessage(JSONObject message) {
+		JSONArray tags;
+		if(!message.has(TAGS_FIELD)) {
+			tags = new JSONArray();
+			tags.put(NO_TAGS);
+		} else {
+			tags = (JSONArray) message.get(TAGS_FIELD);
+		}
+		boolean messageResponder = !message.has("CALLBACK_TAG");
+		for(ClientThread client : clients) {
+			for(int i = 0; i < tags.length(); i++) {
+				if(client.matchesTag(tags.getString(i))) {
+					client.receiveMessage(message.toString());
+					messageResponder = true;
+					break;
+				}
+			}
+		}
+		if(!messageResponder) {
+			sendNoResponse(message);
+		}
+	}
+	
+	private void sendNoResponse(JSONObject message) {
+		JSONArray tags = new JSONArray();
+		tags.put(message.getString("CALLBACK_TAG"));
+		message.put("RespondedTo", false);
+	}
+	
+	@Override
+	public boolean accept(Stanza stanza) {
+		return stanza instanceof Message;
+	}
+	
+	@Override
+	public void processPacket(Stanza stanza) throws NotConnectedException {
+		Message message = (Message) stanza;
+		try {
+			String messageBody = message.getBody();
+			JSONObject json = new JSONObject(messageBody);
+			receiveMessage(json);
+		} catch (Exception ex) {
+			System.out.println(message);
+			System.out.println(message.getBody());
+			ex.printStackTrace();
+		}
+	}
+	
+	private void pauseOutput() {
+		pausedOutput = new ByteArrayOutputStream();
+		System.setOut(new PrintStream(pausedOutput));
+	}
+	
+	private void unpauseOutput() {
+		System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
+		System.out.print(pausedOutput.toString());
+	}
+	
+}

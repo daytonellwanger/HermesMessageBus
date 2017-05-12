@@ -36,6 +36,8 @@ public class Central implements StanzaListener, StanzaFilter {
 	
 	private ByteArrayOutputStream pausedOutput;
 	
+	private AbstractXMPPConnection connection;
+	
 
 	public static void main(String[] args) {
 		new Central().init();
@@ -146,7 +148,7 @@ public class Central implements StanzaListener, StanzaFilter {
 				configBuilder.setSecurityMode(SecurityMode.disabled);
 			}
 			
-			AbstractXMPPConnection connection = new XMPPTCPConnection(configBuilder.build());
+			connection = new XMPPTCPConnection(configBuilder.build());
 			try {
 				connection.connect();
 				connection.login();
@@ -180,6 +182,25 @@ public class Central implements StanzaListener, StanzaFilter {
 			json = new JSONObject(message);
 			receiveMessage(json);
 		} catch (Exception ex) {}
+		
+	}
+	
+	public void sendMessage(String messageBody) {
+		JSONObject messageJSON = new JSONObject(messageBody);
+		String to = messageJSON.getString("to");
+		if(to == null) {
+			return;
+		}
+		if(connection.isConnected()) {
+			Message message = new Message(to);
+			message.setBody("0.true." + messageBody);
+			try { 
+				System.out.println("Sending message: " + message.toString());
+				connection.sendStanza(message);
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+		}
 		
 	}
 	

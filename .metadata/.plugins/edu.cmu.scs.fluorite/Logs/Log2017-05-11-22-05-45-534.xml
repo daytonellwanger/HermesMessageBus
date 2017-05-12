@@ -1,0 +1,458 @@
+<Events startTimestamp="1494554745534" logVersion="0.11.0.201504031625" osName="Windows 10" osVersion="10.0" lineSeparator="\r\n" numMonitors="1" monitorBounds="[0, 0, 1500, 1000]">
+  <Command __id="0" _type="ShellBoundsCommand" bounds="[196, 196, 1024, 768]" timestamp="13" />
+  <Command __id="1" _type="FileOpenCommand" docASTNodeCount="1229" docActiveCodeLength="7348" docExpressionCount="779" docLength="7373" projectName="Hermes" timestamp="43807">
+    <filePath><![CDATA[C:\Users\Dayton\Documents\HermesGit\HermesMessageBus\Hermes\src\main\java\hermes\Central.java]]></filePath>
+    <snapshot><![CDATA[package hermes;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Scanner;
+
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.SmackException.NotConnectedException;
+import org.jivesoftware.smack.StanzaListener;
+import org.jivesoftware.smack.ConnectionConfiguration.SecurityMode;
+import org.jivesoftware.smack.filter.StanzaFilter;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.Stanza;
+import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+public class Central implements StanzaListener, StanzaFilter {
+	
+	private static final String CLIENT_PATHS_FILE = "clients.txt";
+	private static final String CLIENT_FOLDER = "clients";
+	private static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
+	private static final String PROCESS_ID_FIELD = "processId";
+	private static final String TAGS_FIELD = "tags";
+	private static final String NO_TAGS = "none";
+	
+	private List<String> clientPaths;
+	private List<ClientThread> clients;
+	
+	private ByteArrayOutputStream pausedOutput;
+	
+
+	public static void main(String[] args) {
+		new Central().init();
+	}
+	
+	private void init() {
+		clientPaths = new LinkedList<String>();
+		clients = new LinkedList<ClientThread>();
+		getClientPaths();
+		initClients();
+		initXMPP();
+	}
+	
+	private void getClientPaths() {
+		clientPaths.addAll(getClientPathsFromFile());
+		clientPaths.addAll(getClientPathsFromFolder());
+	}
+	
+	private static List<String> getClientPathsFromFile() {
+		List<String> clients = new LinkedList<String>();
+		File pathsFile = new File(CLIENT_PATHS_FILE);
+		try {
+			Scanner scanner = new Scanner(pathsFile);
+			while(scanner.hasNextLine()) {
+				clients.add(scanner.nextLine());
+			}
+			scanner.close();
+		} catch (FileNotFoundException e) {
+			System.out.println("Server paths file " + CLIENT_PATHS_FILE + " not found.");
+			e.printStackTrace();
+		}
+		return clients;
+		
+	}
+	
+	private static List<String> getClientPathsFromFolder() {
+		List<String> clients = new LinkedList<String>();
+		File folder = new File(CLIENT_FOLDER);
+		for(String file : folder.list()) {
+			String[] tokens = file.split("\\.");
+			if(tokens.length >= 2) {
+				if(tokens[tokens.length - 1].equalsIgnoreCase("jar")) {
+					clients.add(CLIENT_FOLDER + "/" + file);
+				}
+			}
+		}
+		return clients;
+	}
+	
+	private void initClients() {
+		for(String jarPath : clientPaths) {
+			try {
+				initClient(jarPath);
+			} catch (Exception ex) {
+				System.out.println("Could not load " + jarPath);
+				ex.printStackTrace();
+			}
+		}
+	}
+	
+	private void initClient(String exePath) throws Exception {
+		String fileExtension = exePath.substring(exePath.lastIndexOf(".") + 1);
+		ProcessBuilder builder;
+		if(fileExtension.equalsIgnoreCase("jar")) {
+			builder = new ProcessBuilder("java", "-jar", (new File(exePath)).getAbsolutePath());
+		} else if (fileExtension.equalsIgnoreCase("js")) {
+			builder = new ProcessBuilder("node", (new File(exePath)).getAbsolutePath());
+		} else {
+			return;
+		}
+		
+		File directory = (new File(exePath)).getParentFile();
+		if(directory != null) {
+			builder.directory(directory);
+		}
+		try {
+			Process clientProcess = builder.start();
+			ClientThread client = new ClientThread(exePath, clientProcess, this);
+			clients.add(client);
+		} catch (Exception ex) {
+			System.out.println("Failed to start server " + exePath);
+			ex.printStackTrace();
+		}
+	}
+	
+	private void initXMPP() {
+		try {
+			Scanner scanner = new Scanner(System.in);
+			System.out.print("XMPP Username: ");
+			String[] usernameAndDomain = scanner.next().split("@");
+			String username = usernameAndDomain[0];
+			String domain = usernameAndDomain[1];
+			System.out.print("\nHost: ");
+			String host = scanner.next();
+			System.out.print("\nPassword: ");
+			String password = scanner.next();
+			System.out.println();
+			System.out.print("\nSecurity? ");
+			boolean security = scanner.next().toLowerCase().contains("y");
+			System.out.println();
+	
+			XMPPTCPConnectionConfiguration.Builder configBuilder = 
+					XMPPTCPConnectionConfiguration.builder();
+			configBuilder.setUsernameAndPassword(username, password);
+			configBuilder.setServiceName(domain);
+			configBuilder.setHost(host);
+			if(!security) {
+				configBuilder.setSecurityMode(SecurityMode.disabled);
+			}
+			
+			AbstractXMPPConnection connection = new XMPPTCPConnection(configBuilder.build());
+			try {
+				connection.connect();
+				connection.login();
+				connection.addSyncStanzaListener(this, this);
+				System.out.println("XMPP Connected.");
+			} catch (Exception ex) {
+				System.out.println("Failed to login.");
+				scanner.close();
+				stopClients();
+				ex.printStackTrace();
+			}
+
+			while(!scanner.next().equals("q"));
+			scanner.close();
+			stopClients();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+	}
+	
+	private void stopClients() {
+		for(ClientThread client : clients) {
+			client.stop();
+		}
+	}
+	
+	//to be called by clients
+	public void receiveMessage(String message) {
+		JSONObject json;
+		try {
+			json = new JSONObject(message);
+			receiveMessage(json);
+		} catch (Exception ex) {}
+		
+	}
+	
+	private void receiveMessage(JSONObject message) {
+		System.out.println(message.toString());
+		if(!message.has(PROCESS_ID_FIELD)) {
+			message.put(PROCESS_ID_FIELD, UNSPECIFIED_PROCESS_ID);
+		}
+		forwardMessage(message);
+	}
+	
+	private void forwardMessage(JSONObject message) {
+		JSONArray tags;
+		if(!message.has(TAGS_FIELD)) {
+			tags = new JSONArray();
+			tags.put(NO_TAGS);
+		} else {
+			tags = (JSONArray) message.get(TAGS_FIELD);
+		}
+		boolean messageResponder = !message.has("CALLBACK_TAG");
+		for(ClientThread client : clients) {
+			for(int i = 0; i < tags.length(); i++) {
+				if(client.matchesTag(tags.getString(i))) {
+					client.receiveMessage(message.toString());
+					messageResponder = true;
+					break;
+				}
+			}
+		}
+		if(!messageResponder) {
+			sendNoResponse(message);
+		}
+	}
+	
+	private void sendNoResponse(JSONObject message) {
+		JSONArray tags = new JSONArray();
+		tags.put(message.getString("CALLBACK_TAG"));
+		message.put("RespondedTo", false);
+	}
+	
+	@Override
+	public boolean accept(Stanza stanza) {
+		return stanza instanceof Message;
+	}
+	
+	@Override
+	public void processPacket(Stanza stanza) throws NotConnectedException {
+		Message message = (Message) stanza;
+		try {
+			String messageBody = message.getBody();
+			JSONObject json = new JSONObject(messageBody);
+			receiveMessage(json);
+		} catch (Exception ex) {
+			System.out.println(message);
+			System.out.println(message.getBody());
+			ex.printStackTrace();
+		}
+	}
+	
+	private void pauseOutput() {
+		pausedOutput = new ByteArrayOutputStream();
+		System.setOut(new PrintStream(pausedOutput));
+	}
+	
+	private void unpauseOutput() {
+		System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
+		System.out.print(pausedOutput.toString());
+	}
+	
+}
+]]></snapshot>
+  </Command>
+  <Command __id="2" _type="MoveCaretCommand" caretOffset="0" docOffset="0" timestamp="44166" />
+  <Command __id="3" _type="ShellBoundsCommand" bounds="[-6, -6, 1513, 973]" repeat="2" timestamp="45912" timestamp2="45912" />
+  <Command __id="5" _type="ShellBoundsCommand" bounds="[-5, 0, 761, 966]" repeat="2" timestamp="87903" timestamp2="87904" />
+  <Command __id="7" _type="MoveCaretCommand" caretOffset="4763" docOffset="5565" timestamp="129022" />
+  <DocumentChange __id="8" _type="Insert" docASTNodeCount="1229" docActiveCodeLength="7351" docExpressionCount="779" docLength="7376" length="3" offset="5565" timestamp="129684">
+    <text><![CDATA[
+	]]></text>
+  </DocumentChange>
+  <Command __id="9" _type="InsertStringCommand" timestamp="129707">
+    <data><![CDATA[]]></data>
+  </Command>
+  <DocumentChange __id="10" _type="Insert" docASTNodeCount="1229" docActiveCodeLength="7354" docExpressionCount="779" docLength="7379" length="3" offset="5568" timestamp="129784">
+    <text><![CDATA[
+	]]></text>
+  </DocumentChange>
+  <Command __id="11" _type="InsertStringCommand" timestamp="129797">
+    <data><![CDATA[]]></data>
+  </Command>
+  <DocumentChange __id="12" _type="Insert" docASTNodeCount="1229" docActiveCodeLength="7354" docExpressionCount="779" docLength="7379" length="492" offset="5571" timestamp="129963">
+    <text><![CDATA[public void sendMessage(String messageBody) {
+		JSONObject messageJSON = new JSONObject(messageBody);
+		String to = messageJSON.getString("to");
+		if(to == null) {
+			return;
+		}
+		if(connection.isConnected()) {
+			Message message = new Message(to);
+			message.setBody("0.true." + messageBody);
+			try { 
+				System.out.println("Sending message: " + message.toString());
+				connection.sendStanza(message);
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+		}
+		
+	}]]></text>
+  </DocumentChange>
+  <Command __id="13" _type="PasteCommand" timestamp="130006" />
+  <Command __id="14" _type="MoveCaretCommand" caretOffset="5248" docOffset="6050" timestamp="141087" />
+  <Command __id="15" _type="MoveCaretCommand" caretOffset="607" docOffset="1409" timestamp="149801" />
+  <DocumentChange __id="16" _type="Insert" docASTNodeCount="1311" docActiveCodeLength="7849" docExpressionCount="829" docLength="7874" length="3" offset="1409" timestamp="150370">
+    <text><![CDATA[
+	]]></text>
+  </DocumentChange>
+  <Command __id="17" _type="InsertStringCommand" timestamp="150388">
+    <data><![CDATA[]]></data>
+  </Command>
+  <DocumentChange __id="18" _type="Insert" docASTNodeCount="1311" docActiveCodeLength="7849" docExpressionCount="829" docLength="7874" length="42" offset="1412" timestamp="150501">
+    <text><![CDATA[private AbstractXMPPConnection connection;]]></text>
+  </DocumentChange>
+  <Command __id="19" _type="PasteCommand" timestamp="150515" />
+  <DocumentChange __id="20" _type="Insert" docASTNodeCount="1317" docActiveCodeLength="7894" docExpressionCount="831" docLength="7919" length="3" offset="1454" timestamp="152791">
+    <text><![CDATA[
+	]]></text>
+  </DocumentChange>
+  <Command __id="21" _type="InsertStringCommand" timestamp="152805">
+    <data><![CDATA[]]></data>
+  </Command>
+  <Command __id="22" _type="MoveCaretCommand" caretOffset="3994" docOffset="4796" timestamp="161889" />
+  <DocumentChange __id="23" _type="Delete" docASTNodeCount="1315" docActiveCodeLength="7871" docExpressionCount="831" docLength="7896" endLine="150" length="23" offset="4773" repeat="23" startLine="150" timestamp="162527" timestamp2="164837">
+    <text><![CDATA[AbstractXMPPConnection ]]></text>
+  </DocumentChange>
+  <Command __id="24" _type="EclipseCommand" commandID="eventLogger.styledTextCommand.DELETE_PREVIOUS" repeat="23" timestamp="162552" timestamp2="164846" />
+  <Command __id="69" _type="EclipseCommand" commandID="org.eclipse.ui.file.saveAll" timestamp="182314" />
+  <Command __id="70" _type="FileOpenCommand" docASTNodeCount="485" docActiveCodeLength="2838" docExpressionCount="301" docLength="2838" projectName="Hermes" timestamp="187267">
+    <filePath><![CDATA[C:\Users\Dayton\Documents\HermesGit\HermesMessageBus\Hermes\src\main\java\hermes\ClientThread.java]]></filePath>
+    <snapshot><![CDATA[package hermes;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.util.Scanner;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang3.exception.ExceptionUtils;
+
+public class ClientThread {
+	
+	private static final String TAG_START = "<TAG>";
+	private static final String MSG_START = "<MSG>";
+	private static final String OUTPUT_START = "<OUTPUT>";
+	
+	private String name;
+	private Process process;
+	private StreamThread inputStream;
+	private StreamThread errorStream;
+	private PrintWriter output;
+	private Pattern tagsPattern;
+	private Central central;
+	
+
+	public ClientThread(String name, Process process, Central central) {
+		this.name = name;
+		this.process = process;
+		this.central = central;
+		init();
+	}
+	
+	private void init() {
+		inputStream = new StreamThread(process.getInputStream());
+		errorStream = new StreamThread(process.getErrorStream());
+		output = new PrintWriter(new BufferedOutputStream(process.getOutputStream()));
+		(new Thread(inputStream)).start();
+		(new Thread(errorStream)).start();
+	}
+	
+	public boolean matchesTag(String tag) {
+		return (tagsPattern == null) ? false : tagsPattern.matcher(tag).matches();
+	}
+	
+	private void setTags(String tagsRegex) {
+		tagsPattern = Pattern.compile(tagsRegex);
+	}
+	
+	public void stop() {
+		inputStream.stop();
+		errorStream.stop();
+		process.destroy();
+	}
+	
+	public void receiveMessage(String message) {
+		output.println(message.length());
+		output.println(message);
+		output.flush();
+	}
+	
+	
+	class StreamThread implements Runnable {
+		
+		private InputStream stream;
+		private boolean running;
+		
+		public StreamThread(InputStream stream) {
+			this.stream = stream;
+			running = true;
+		}
+		
+		public void stop() {
+			running = false;
+		}
+		
+		public void run() {
+			Scanner scanner = new Scanner(new BufferedInputStream(stream));
+			while(running) {
+				try {
+					int lineLength = scanner.nextInt();
+					scanner.nextLine();
+					String next = "";
+					while(lineLength > 0) {
+						String nextLine = scanner.nextLine();
+						next += nextLine;
+						lineLength -= nextLine.length();
+						if(lineLength > 0) {
+							next += "\n";
+							lineLength--;
+						}
+					}
+					if(next.startsWith(TAG_START)) {
+						setTags(next.substring(TAG_START.length()));
+					} else if (next.startsWith(MSG_START)) {
+						central.receiveMessage(next.substring(MSG_START.length()));
+					} else if (next.startsWith(OUTPUT_START)){
+						System.out.println(name + ": " + next.substring(OUTPUT_START.length()));
+					}
+				} catch (Exception ex) {
+					System.out.println(name + ": " + ExceptionUtils.getStackTrace(ex));
+					break;
+				}
+			}
+			scanner.close();
+		}
+		
+	}
+	
+}]]></snapshot>
+  </Command>
+  <Command __id="71" _type="MoveCaretCommand" caretOffset="0" docOffset="0" timestamp="187401" />
+  <Command __id="72" _type="MoveCaretCommand" caretOffset="247" docOffset="464" timestamp="195619" />
+  <DocumentChange __id="73" _type="Insert" docASTNodeCount="485" docActiveCodeLength="2841" docExpressionCount="301" docLength="2841" length="3" offset="464" timestamp="196247">
+    <text><![CDATA[
+	]]></text>
+  </DocumentChange>
+  <Command __id="74" _type="InsertStringCommand" timestamp="196256">
+    <data><![CDATA[]]></data>
+  </Command>
+  <DocumentChange __id="75" _type="Insert" docASTNodeCount="485" docActiveCodeLength="2841" docExpressionCount="301" docLength="2841" length="48" offset="467" timestamp="196436">
+    <text><![CDATA[private static final String MSG_SEND = "<SEND>";]]></text>
+  </DocumentChange>
+  <Command __id="76" _type="PasteCommand" timestamp="196453" />
+  <Command __id="77" _type="MoveCaretCommand" caretOffset="2502" docOffset="2719" timestamp="218809" />
+  <DocumentChange __id="78" _type="Insert" docASTNodeCount="510" docActiveCodeLength="2997" docExpressionCount="317" docLength="2997" length="108" offset="2719" timestamp="218974">
+    <text><![CDATA[else if (next.startsWith(MSG_SEND)) {
+						central.sendMessage(next.substring(MSG_SEND.length()));
+					}]]></text>
+  </DocumentChange>
+  <Command __id="79" _type="PasteCommand" timestamp="219007" />
+  <Command __id="80" _type="MoveCaretCommand" caretOffset="2382" docOffset="2599" timestamp="219976" />
+  <Command __id="81" _type="MoveCaretCommand" caretOffset="2502" docOffset="2719" timestamp="222233" />
