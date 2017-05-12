@@ -456,3 +456,13 @@ public class ClientThread {
   <Command __id="79" _type="PasteCommand" timestamp="219007" />
   <Command __id="80" _type="MoveCaretCommand" caretOffset="2382" docOffset="2599" timestamp="219976" />
   <Command __id="81" _type="MoveCaretCommand" caretOffset="2502" docOffset="2719" timestamp="222233" />
+  <DocumentChange __id="82" _type="Insert" docASTNodeCount="510" docActiveCodeLength="2998" docExpressionCount="317" docLength="2998" length="1" offset="2719" timestamp="222557">
+    <text><![CDATA[ ]]></text>
+  </DocumentChange>
+  <Command __id="83" _type="InsertStringCommand" timestamp="222570">
+    <data><![CDATA[ ]]></data>
+  </Command>
+  <Command __id="84" _type="MoveCaretCommand" caretOffset="2611" docOffset="2828" timestamp="224137" />
+  <Command __id="85" _type="EclipseCommand" commandID="org.eclipse.ui.file.saveAll" timestamp="230305" />
+  <Command __id="86" _type="ShellBoundsCommand" bounds="[-5, 0, 761, 966]" timestamp="601517" />
+</Events>
