@@ -110,9 +110,14 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 		
 		File directory = (new File(exePath)).getParentFile();
+		if (!directory.exists()) {
+			System.out.println(directory + " specified in clients.txt or clients folder does not exist, cannot start message bus client");
+			return;
+		}
 		if(directory != null) {
 			builder.directory(directory);
 		}
+		
 		try {
 			Process clientProcess = builder.start();
 			ClientThread client = new ClientThread(exePath, clientProcess, this);
@@ -165,6 +170,7 @@ public class Central implements StanzaListener, StanzaFilter {
 			scanner.close();
 			stopClients();
 		} catch (Exception ex) {
+			System.out.println("Error processing user input");
 			ex.printStackTrace();
 		}
 	}
