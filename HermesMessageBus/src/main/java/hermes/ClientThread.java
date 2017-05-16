@@ -19,7 +19,7 @@ public class ClientThread {
 	private String name;
 	private Process process;
 	private StreamThread inputStream;
-	private StreamThread errorStream;
+	private ErrorStreamThread errorStream;
 	private PrintWriter output;
 	private Pattern tagsPattern;
 	private Central central;
@@ -34,7 +34,9 @@ public class ClientThread {
 	
 	private void init() {
 		inputStream = new StreamThread(process.getInputStream());
-		errorStream = new StreamThread(process.getErrorStream());
+//		errorStream = new StreamThread(process.getErrorStream());
+		errorStream = new ErrorStreamThread(process.getErrorStream());
+
 		output = new PrintWriter(new BufferedOutputStream(process.getOutputStream()));
 		(new Thread(inputStream)).start();
 		(new Thread(errorStream)).start();
@@ -79,6 +81,10 @@ public class ClientThread {
 			Scanner scanner = new Scanner(new BufferedInputStream(stream));
 			while(running) {
 				try {
+					if(!scanner.hasNextInt()){
+						System.out.println("client output: " + scanner.next());
+						continue;
+					}
 					int lineLength = scanner.nextInt();
 					scanner.nextLine();
 					String next = "";
@@ -100,6 +106,36 @@ public class ClientThread {
 					} else if (next.startsWith(MSG_SEND)) {
 						central.sendMessage(next.substring(MSG_SEND.length()));
 					}
+				} catch (Exception ex) {
+					System.out.println(name + ": " + ExceptionUtils.getStackTrace(ex));
+					break;
+				}
+			}
+			scanner.close();
+		}
+		
+	}
+class ErrorStreamThread implements Runnable {
+		
+		private InputStream stream;
+		private boolean running;
+		
+		public ErrorStreamThread(InputStream stream) {
+			this.stream = stream;
+			running = true;
+		}
+		
+		public void stop() {
+			running = false;
+		}
+		
+		public void run() {
+			Scanner scanner = new Scanner(new BufferedInputStream(stream));
+			while(running) {
+				try {
+					String next = scanner.nextLine();
+					System.err.println("client err: " + next);
+
 				} catch (Exception ex) {
 					System.out.println(name + ": " + ExceptionUtils.getStackTrace(ex));
 					break;
