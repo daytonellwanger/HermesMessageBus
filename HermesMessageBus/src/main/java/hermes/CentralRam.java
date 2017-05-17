@@ -46,14 +46,15 @@ public class CentralRam extends Central implements StanzaListener, StanzaFilter 
 		new CentralRam().init();
 	}
 	
-//	private void init() {
+	protected void init() {
 //		serverPaths = new LinkedList<String>();
 //		servers = new LinkedList<ClientThread>();
-//		messageFragments = new HashMap<Integer, List<String>>();
+		messageFragments = new HashMap<Integer, List<String>>();
+		super.init();
 //		getServerPaths();
 //		initServers();
 //		initXMPP();
-//	}
+	}
 //	
 //	private void getServerPaths() {
 //		serverPaths.addAll(getServerPathsFromFile());
