@@ -24,26 +24,26 @@ import org.json.JSONObject;
 
 public class Central implements StanzaListener, StanzaFilter {
 	
-	private static final String CLIENT_PATHS_FILE = "clients.txt";
-	private static final String CLIENT_FOLDER = "clients";
-	private static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
-	private static final String PROCESS_ID_FIELD = "processId";
-	private static final String TAGS_FIELD = "tags";
-	private static final String NO_TAGS = "none";
+	protected static final String CLIENT_PATHS_FILE = "clients.txt";
+	protected static final String CLIENT_FOLDER = "clients";
+	protected static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
+	protected static final String PROCESS_ID_FIELD = "processId";
+	protected static final String TAGS_FIELD = "tags";
+	protected static final String NO_TAGS = "none";
 	
-	private List<String> clientPaths;
-	private List<ClientThread> clients;
+	protected List<String> clientPaths;
+	protected List<ClientThread> clients;
 	
-	private ByteArrayOutputStream pausedOutput;
+	protected ByteArrayOutputStream pausedOutput;
 	
-	private AbstractXMPPConnection connection;
+	protected AbstractXMPPConnection connection;
 	
 
 	public static void main(String[] args) {
 		new Central().init();
 	}
 	
-	private void init() {
+	protected void init() {
 		clientPaths = new LinkedList<String>();
 		clients = new LinkedList<ClientThread>();
 		getClientPaths();
@@ -51,12 +51,12 @@ public class Central implements StanzaListener, StanzaFilter {
 		initXMPP();
 	}
 	
-	private void getClientPaths() {
+	protected void getClientPaths() {
 		clientPaths.addAll(getClientPathsFromFile());
 		clientPaths.addAll(getClientPathsFromFolder());
 	}
 	
-	private static List<String> getClientPathsFromFile() {
+	protected static List<String> getClientPathsFromFile() {
 		List<String> clients = new LinkedList<String>();
 		File pathsFile = new File(CLIENT_PATHS_FILE);
 		try {
@@ -73,7 +73,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		
 	}
 	
-	private static List<String> getClientPathsFromFolder() {
+	protected static List<String> getClientPathsFromFolder() {
 		List<String> clients = new LinkedList<String>();
 		File folder = new File(CLIENT_FOLDER);
 		for(String file : folder.list()) {
@@ -87,7 +87,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		return clients;
 	}
 	
-	private void initClients() {
+	protected void initClients() {
 		for(String jarPath : clientPaths) {
 			try {
 				initClient(jarPath);
@@ -98,7 +98,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 	}
 	
-	private void initClient(String exePath) throws Exception {
+	protected void initClient(String exePath) throws Exception {
 		String fileExtension = exePath.substring(exePath.lastIndexOf(".") + 1);
 		ProcessBuilder builder;
 		if(fileExtension.equalsIgnoreCase("jar")) {
@@ -128,7 +128,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 	}
 	
-	private void initXMPP() {
+	protected void initXMPP() {
 		try {
 			Scanner scanner = new Scanner(System.in);
 			System.out.print("XMPP Username: ");
@@ -175,7 +175,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 	}
 	
-	private void stopClients() {
+	protected void stopClients() {
 		for(ClientThread client : clients) {
 			client.stop();
 		}
@@ -210,7 +210,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		
 	}
 	
-	private void receiveMessage(JSONObject message) {
+	protected void receiveMessage(JSONObject message) {
 		System.out.println(message.toString());
 		if(!message.has(PROCESS_ID_FIELD)) {
 			message.put(PROCESS_ID_FIELD, UNSPECIFIED_PROCESS_ID);
@@ -218,7 +218,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		forwardMessage(message);
 	}
 	
-	private void forwardMessage(JSONObject message) {
+	protected void forwardMessage(JSONObject message) {
 		JSONArray tags;
 		if(!message.has(TAGS_FIELD)) {
 			tags = new JSONArray();
@@ -241,7 +241,7 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 	}
 	
-	private void sendNoResponse(JSONObject message) {
+	protected void sendNoResponse(JSONObject message) {
 		JSONArray tags = new JSONArray();
 		tags.put(message.getString("CALLBACK_TAG"));
 		message.put("RespondedTo", false);
@@ -266,12 +266,12 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 	}
 	
-	private void pauseOutput() {
+	protected void pauseOutput() {
 		pausedOutput = new ByteArrayOutputStream();
 		System.setOut(new PrintStream(pausedOutput));
 	}
 	
-	private void unpauseOutput() {
+	protected void unpauseOutput() {
 		System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out)));
 		System.out.print(pausedOutput.toString());
 	}
