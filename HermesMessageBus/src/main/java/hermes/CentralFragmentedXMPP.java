@@ -24,7 +24,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class CentralRam extends Central implements StanzaListener, StanzaFilter {
+public class CentralFragmentedXMPP extends Central implements StanzaListener, StanzaFilter {
 //	
 //	private static final String SERVER_PATHS_FILE = "servers.txt";
 //	private static final String SERVER_FOLDER = "servers";
@@ -43,7 +43,7 @@ public class CentralRam extends Central implements StanzaListener, StanzaFilter 
 //	
 
 	public static void main(String[] args) {
-		new CentralRam().init();
+		new CentralFragmentedXMPP().init();
 	}
 	
 	protected void init() {
@@ -272,6 +272,10 @@ public class CentralRam extends Central implements StanzaListener, StanzaFilter 
 		Message message = (Message) stanza;
 		try {
 			String messageBody = message.getBody();
+			if (messageBody.startsWith("{"))  {
+				super.processPacket(stanza);
+				return;
+			}
 			int div1 = messageBody.indexOf(".", 0);
 			int div2 = messageBody.indexOf(".", div1 + 1);
 			int hash = Integer.parseInt(messageBody.substring(0, div1));
