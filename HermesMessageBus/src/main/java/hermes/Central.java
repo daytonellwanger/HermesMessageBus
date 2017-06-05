@@ -25,6 +25,8 @@ import org.json.JSONObject;
 public class Central implements StanzaListener, StanzaFilter {
 	
 	protected static final String CLIENT_PATHS_FILE = "clients.txt";
+	protected static final String XMPP_CREDENTIALS_FILE = "xmppcredentials.txt";
+
 	protected static final String CLIENT_FOLDER = "clients";
 	protected static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
 	protected static final String PROCESS_ID_FIELD = "processId";
@@ -135,19 +137,34 @@ public class Central implements StanzaListener, StanzaFilter {
 	
 	protected void initXMPP() {
 		try {
-			Scanner scanner = new Scanner(System.in);
+			Scanner credentialsScanner = null;
+			Scanner interactiveScanner = new Scanner(System.in);
+			File aCredentialsFile = new File(XMPP_CREDENTIALS_FILE);
+			if (aCredentialsFile.exists()) {
+				credentialsScanner = new Scanner(aCredentialsFile);
+			} else {
+				credentialsScanner = interactiveScanner;
+//				scanner = new Scanner(System.in);
+			}
+//			Scanner scanner = new Scanner(System.in);
 			System.out.print("XMPP Username: ");
-			String[] usernameAndDomain = scanner.next().split("@");
+			String[] usernameAndDomain = credentialsScanner.next().split("@");
 			String username = usernameAndDomain[0];
 			String domain = usernameAndDomain[1];
 			System.out.print("\nHost: ");
-			String host = scanner.next();
+			String host = credentialsScanner.next();
 			System.out.print("\nPassword: ");
-			String password = scanner.next();
+			String password = credentialsScanner.next();
 			System.out.println();
 			System.out.print("\nSecurity? ");
-			boolean security = scanner.next().toLowerCase().contains("y");
+			boolean security = credentialsScanner.next().toLowerCase().contains("y");
 			System.out.println();
+			System.out.println("Connetion parameters:" +
+						" User Name:" + username + 
+						" Password:" + password + 
+						" Domain:" + domain +
+						" Host:" + host +
+						" Security Mode: " + security);
 	
 			XMPPTCPConnectionConfiguration.Builder configBuilder = 
 					XMPPTCPConnectionConfiguration.builder();
@@ -166,14 +183,20 @@ public class Central implements StanzaListener, StanzaFilter {
 				System.out.println("XMPP Connected.");
 			} catch (Exception ex) {
 				System.out.println("Failed to login.");
-				scanner.close();
+				credentialsScanner.close();
 				stopClients();
 				ex.printStackTrace();
+				return;
 			}
 
-			while(!scanner.next().equals("q"));
-			scanner.close();
+//			while(!scanner.next().equals("q"));
+//			scanner.close();
+			while(!interactiveScanner.next().equals("q"));
+			interactiveScanner.close();
 			stopClients();
+			if (interactiveScanner != credentialsScanner) {
+				credentialsScanner.close();
+			}
 		} catch (Exception ex) {
 			System.out.println("Error processing user input");
 			ex.printStackTrace();
