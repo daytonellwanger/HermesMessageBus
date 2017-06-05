@@ -30,6 +30,7 @@ public class Central implements StanzaListener, StanzaFilter {
 	protected static final String PROCESS_ID_FIELD = "processId";
 	protected static final String TAGS_FIELD = "tags";
 	protected static final String NO_TAGS = "none";
+	protected static final String COMMENT_PREFIX = "#";
 	
 	protected List<String> clientPaths;
 	protected List<ClientThread> clients;
@@ -62,7 +63,11 @@ public class Central implements StanzaListener, StanzaFilter {
 		try {
 			Scanner scanner = new Scanner(pathsFile);
 			while(scanner.hasNextLine()) {
-				clients.add(scanner.nextLine());
+				String aNextLine = scanner.nextLine();
+				if (aNextLine.startsWith(COMMENT_PREFIX))
+					continue;
+				clients.add(aNextLine);
+//				clients.add(scanner.nextLine());
 			}
 			scanner.close();
 		} catch (FileNotFoundException e) {
