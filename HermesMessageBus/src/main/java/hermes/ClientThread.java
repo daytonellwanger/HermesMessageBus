@@ -11,18 +11,18 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 
 public class ClientThread {
 	
-	private static final String TAG_START = "<TAG>";
-	private static final String MSG_START = "<MSG>";
-	private static final String OUTPUT_START = "<OUTPUT>";
-	private static final String MSG_SEND = "<SEND>";
+	protected static final String TAG_START = "<TAG>";
+	protected static final String MSG_START = "<MSG>";
+	protected static final String OUTPUT_START = "<OUTPUT>";
+	protected static final String MSG_SEND = "<SEND>";
 	
-	private String name;
-	private Process process;
-	private StreamThread inputStream;
-	private ErrorStreamThread errorStream;
-	private PrintWriter output;
-	private Pattern tagsPattern;
-	private Central central;
+	protected String name;
+	protected Process process;
+	protected StreamThread inputStream;
+	protected ErrorStreamThread errorStream;
+	protected PrintWriter output;
+	protected Pattern tagsPattern;
+	protected Central central;
 	
 
 	public ClientThread(String name, Process process, Central central) {
@@ -31,8 +31,12 @@ public class ClientThread {
 		this.central = central;
 		init();
 	}
+	public ClientThread(Central aCentral) {		
+		this.central = aCentral;
+//		init();
+	}
 	
-	private void init() {
+	protected void init() {
 		inputStream = new StreamThread(process.getInputStream());
 //		errorStream = new StreamThread(process.getErrorStream());
 		errorStream = new ErrorStreamThread(process.getErrorStream());
@@ -46,7 +50,7 @@ public class ClientThread {
 		return (tagsPattern == null) ? false : tagsPattern.matcher(tag).matches();
 	}
 	
-	private void setTags(String tagsRegex) {
+	protected void setTags(String tagsRegex) {
 		tagsPattern = Pattern.compile(tagsRegex);
 	}
 	
@@ -63,7 +67,7 @@ public class ClientThread {
 	}
 	
 	
-	class StreamThread implements Runnable {
+	protected class StreamThread implements Runnable {
 		
 		private InputStream stream;
 		private boolean running;
@@ -115,7 +119,7 @@ public class ClientThread {
 		}
 		
 	}
-class ErrorStreamThread implements Runnable {
+protected class ErrorStreamThread implements Runnable {
 		
 		private InputStream stream;
 		private boolean running;

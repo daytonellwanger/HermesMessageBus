@@ -1,12 +1,12 @@
 *target*
-*.jar
+#*.jar
 *.war
 *.ear
 *.class
 
 # eclipse specific git ignore
 *.pydevproject
-.project
+#.project
 .metadata
 */bin/**
 bin/**
@@ -18,8 +18,8 @@ bin/**
 *.swp
 *~.nib
 local.properties
-.classpath
-.settings/
+#.classpath
+#.settings/
 .loadpath
 
 # External tool builders

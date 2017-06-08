@@ -134,7 +134,12 @@ public class Central implements StanzaListener, StanzaFilter {
 			ex.printStackTrace();
 		}
 	}
-	
+	/**
+	 * Gets XMPP credentials, from file it it exists, consle otherwise.
+	 * Also keeps reading user input,doing nothing, until q is pressed.
+	 * Should actually have start and end mesage so we can interactively
+	 * send messages. TO-DO
+	 */
 	protected void initXMPP() {
 		try {
 			Scanner credentialsScanner = null;
@@ -159,7 +164,7 @@ public class Central implements StanzaListener, StanzaFilter {
 			System.out.print("\nSecurity? ");
 			boolean security = credentialsScanner.next().toLowerCase().contains("y");
 			System.out.println();
-			System.out.println("Connetion parameters:" +
+			System.out.println("Connetion parameters\n" +
 						" User Name:" + username + 
 						" Password:" + password + 
 						" Domain:" + domain +
