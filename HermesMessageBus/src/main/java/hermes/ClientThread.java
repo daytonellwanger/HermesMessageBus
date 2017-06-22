@@ -9,6 +9,9 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 
+import util.trace.hermes.messagebus.ClientProcessRegisteredTags;
+import util.trace.hermes.messagebus.ClientProcessProducedOutput;
+
 public class ClientThread {
 	
 	protected static final String TAG_START = "<TAG>";
@@ -17,6 +20,7 @@ public class ClientThread {
 	protected static final String MSG_SEND = "<SEND>";
 	
 	protected String name;
+	protected String shortName;
 	protected Process process;
 	protected StreamThread inputStream;
 	protected ErrorStreamThread errorStream;
@@ -27,6 +31,7 @@ public class ClientThread {
 
 	public ClientThread(String name, Process process, Central central) {
 		this.name = name;
+		shortName = toShortName(name);
 		this.process = process;
 		this.central = central;
 		init();
@@ -34,6 +39,20 @@ public class ClientThread {
 	public ClientThread(Central aCentral) {		
 		this.central = aCentral;
 //		init();
+	}
+	protected String toShortName(String aName) {
+		int aSlashIndex = aName.lastIndexOf("/");
+		if (aSlashIndex == -1) {
+			aSlashIndex = aName.lastIndexOf("\\");
+		}
+		if (aSlashIndex == -1) {
+			return aName;
+		}
+		return aName.substring(aSlashIndex + 1);
+	}
+	@Override
+	public String toString() {
+		return shortName;
 	}
 	
 	protected void init() {
@@ -52,6 +71,7 @@ public class ClientThread {
 	
 	protected void setTags(String tagsRegex) {
 		tagsPattern = Pattern.compile(tagsRegex);
+		ClientProcessRegisteredTags.newCase(this, this, tagsRegex);
 	}
 	
 	public void stop() {
@@ -106,7 +126,11 @@ public class ClientThread {
 					} else if (next.startsWith(MSG_START)) {
 						central.receiveMessage(next.substring(MSG_START.length()));
 					} else if (next.startsWith(OUTPUT_START)){
-						System.out.println(name + ": " + next.substring(OUTPUT_START.length()));
+						String anOutput = next.substring(OUTPUT_START.length());
+						ClientProcessProducedOutput.newCase(this, name, anOutput);						
+//						System.out.println(name + ": " + next.substring(OUTPUT_START.length()));
+						System.out.println(name + ": " + anOutput);
+
 					} else if (next.startsWith(MSG_SEND)) {
 						central.sendMessage(next.substring(MSG_SEND.length()));
 					}

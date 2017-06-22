@@ -22,6 +22,15 @@ import org.jivesoftware.smack.tcp.XMPPTCPConnectionConfiguration;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import util.trace.hermes.messagebus.MessageBusTraceUtility;
+import util.trace.json.HermesCommunicationTraceUtility;
+import util.trace.json.JSONObjectReceived;
+import util.trace.json.JSONObjectSentToUser;
+import util.trace.messagebus.clients.MessageBusClientsTraceUtility;
+import util.trace.messagebus.clients.ReceivedJSONObjectForwardedToClientProcess;
+import util.trace.xmpp.XMPPPacketReceived;
+import util.trace.xmpp.XMPPPacketSent;
+
 public class Central implements StanzaListener, StanzaFilter {
 	
 	protected static final String CLIENT_PATHS_FILE = "clients.txt";
@@ -31,8 +40,9 @@ public class Central implements StanzaListener, StanzaFilter {
 	protected static final String UNSPECIFIED_PROCESS_ID = "UNSPECIFIED";
 	protected static final String PROCESS_ID_FIELD = "processId";
 	protected static final String TAGS_FIELD = "tags";
-	protected static final String NO_TAGS = "none";
+	public static final String NO_TAGS = "none";
 	protected static final String COMMENT_PREFIX = "#";
+	public static final String CALLBACK_TAG = "CALLBACK_TAG";
 	
 	protected List<String> clientPaths;
 	protected List<ClientThread> clients;
@@ -43,6 +53,9 @@ public class Central implements StanzaListener, StanzaFilter {
 	
 
 	public static void main(String[] args) {
+		MessageBusTraceUtility.setTracing();
+		MessageBusClientsTraceUtility.setTracing();
+		HermesCommunicationTraceUtility.setTracing();
 		new Central().init();
 	}
 	
@@ -164,7 +177,7 @@ public class Central implements StanzaListener, StanzaFilter {
 			System.out.print("\nSecurity? ");
 			boolean security = credentialsScanner.next().toLowerCase().contains("y");
 			System.out.println();
-			System.out.println("Connetion parameters\n" +
+			System.out.println("Connection parameters\n" +
 						" User Name:" + username + 
 						" Password:" + password + 
 						" Domain:" + domain +
@@ -235,6 +248,8 @@ public class Central implements StanzaListener, StanzaFilter {
 			message.setBody("0.true." + messageBody);
 			try { 
 				System.out.println("Sending message: " + message.toString());
+				JSONObjectSentToUser.newCase(this, messageJSON.toString());
+				XMPPPacketSent.newCase(this, message.toString());
 				connection.sendStanza(message);
 			} catch (Exception ex) {
 				ex.printStackTrace();
@@ -245,6 +260,7 @@ public class Central implements StanzaListener, StanzaFilter {
 	
 	protected void receiveMessage(JSONObject message) {
 		System.out.println(message.toString());
+		JSONObjectReceived.newCase(this, message.toString());
 		if(!message.has(PROCESS_ID_FIELD)) {
 			message.put(PROCESS_ID_FIELD, UNSPECIFIED_PROCESS_ID);
 		}
@@ -262,7 +278,10 @@ public class Central implements StanzaListener, StanzaFilter {
 		boolean messageResponder = !message.has("CALLBACK_TAG");
 		for(ClientThread client : clients) {
 			for(int i = 0; i < tags.length(); i++) {
-				if(client.matchesTag(tags.getString(i))) {
+				String aTag = tags.getString(i);
+				if(client.matchesTag(aTag)) {
+//				if(client.matchesTag(tags.getString(i))) {
+					ReceivedJSONObjectForwardedToClientProcess.newCase(this, client.toString(), aTag);
 					client.receiveMessage(message.toString());
 					messageResponder = true;
 					break;
@@ -276,7 +295,9 @@ public class Central implements StanzaListener, StanzaFilter {
 	
 	protected void sendNoResponse(JSONObject message) {
 		JSONArray tags = new JSONArray();
-		tags.put(message.getString("CALLBACK_TAG"));
+//		tags.put(message.getString("CALLBACK_TAG"));
+		tags.put(message.getString(CALLBACK_TAG));
+
 		message.put("RespondedTo", false);
 	}
 	
@@ -288,6 +309,7 @@ public class Central implements StanzaListener, StanzaFilter {
 	@Override
 	public void processPacket(Stanza stanza) throws NotConnectedException {
 		Message message = (Message) stanza;
+		XMPPPacketReceived.newCase(this, message.toString());
 		try {
 			String messageBody = message.getBody();
 			JSONObject json = new JSONObject(messageBody);

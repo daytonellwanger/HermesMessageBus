@@ -7,5 +7,7 @@
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
 	<classpathentry kind="con" path="org.eclipse.buildship.core.gradleclasspathcontainer"/>
+	<classpathentry kind="lib" path="D:/dewan_backup/Java/lib/oeall22.jar" sourcepath="/uigen"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/MessageBusClientLibraries"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

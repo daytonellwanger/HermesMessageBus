@@ -8,6 +8,7 @@ import java.util.List;
 import hermes.CentralFragmentedXMPP;
 //import inputport.rpc.GIPCLocateRegistry;
 //import inputport.rpc.GIPCRegistry;
+import hermes.messagebus.remote.RemoteCentralRegistry;
 
 public class ARemoteCentralRegistry extends CentralFragmentedXMPP implements RemoteCentralRegistry {
 	public static void main(String[] args) {
