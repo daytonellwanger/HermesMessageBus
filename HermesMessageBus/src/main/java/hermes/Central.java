@@ -266,15 +266,25 @@ public class Central implements StanzaListener, StanzaFilter {
 		}
 		forwardMessage(message);
 	}
-	
-	protected void forwardMessage(JSONObject message) {
+	public static JSONArray toTags(JSONObject message){
 		JSONArray tags;
 		if(!message.has(TAGS_FIELD)) {
 			tags = new JSONArray();
 			tags.put(NO_TAGS);
 		} else {
-			tags = (JSONArray) message.get(TAGS_FIELD);
+			tags = (JSONArray) message.get(TAGS_FIELD); // why is it not complaining about uncaught exception
 		}
+		return tags; // why no complaint about uniinitialized tags
+	}
+	protected void forwardMessage(JSONObject message) {
+//		JSONArray tags;
+//		if(!message.has(TAGS_FIELD)) {
+//			tags = new JSONArray();
+//			tags.put(NO_TAGS);
+//		} else {
+//			tags = (JSONArray) message.get(TAGS_FIELD);
+//		}
+		JSONArray tags = toTags(message);
 		boolean messageResponder = !message.has("CALLBACK_TAG");
 		for(ClientThread client : clients) {
 			for(int i = 0; i < tags.length(); i++) {
